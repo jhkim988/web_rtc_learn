@@ -35,23 +35,8 @@ const ConnectPeerList = ({ data, controller }) => {
         const msg = JSON.parse(data);
         console.log(msg);
         if (controller[msg.method]) {
-          controller[msg.method](msg);
+          controller[msg.method](msg, { connList, peerList, setConnList, setPeerList });
           return;
-        }
-        switch (msg.method) {
-          case "close":
-            connList.some(conn => conn.peer === msg.peer && conn.close());
-            setPeerList(peerList.filter(p => p !== msg.peer));
-            setConnList(connList.filter(c => c.peer !== msg.peer));
-            break;
-          case "open":
-            const conn = peer.connect(msg.peer);
-            conn.on("open", () => { conn.send(JSON.stringify({ method: "reflexOpen", peer: myPeerId })); });
-            setPeerList([...peerList, msg.peer]);
-            setConnList([...connList, conn]);
-            break;
-          default:
-            break;
         }
       });
     });
