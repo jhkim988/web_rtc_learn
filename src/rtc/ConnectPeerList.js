@@ -11,42 +11,51 @@ const objConnInfo = {
 }
 
 const reducer = (state, action) => {
-  let ctx = null;
-
   switch (action.type) {
-    case "open":
+    case "open": {
+      const conn = action.peer.connect(action.peerId);
+      const ctx = action.canvasRef.current.getContext("2d");
+      conn.on("open", () => conn.send(JSON.stringify({ type: "openReflection", peerId: action.myPeerId })));
+
       return {
         ...state,
         [action.peerId]: {
-          conn: action.conn,
-          ctx: action.ctx,
+          conn,
+          ctx,
         },
       }
+    }
 
-    case "openRequest":
+    case "openReflection": {
+      const conn = action.peer.connect(action.peerId);
+      const ctx = action.canvasRef.current.getContext("2d");
       return {
         ...state,
         [action.peerId]: {
-          conn: action.conn,
-          ctx: action.canvasRef.current.getContext("2d"),
-        }
+          conn,
+          ctx,
+        },
       }
+    }
 
     case "close":
       state[action.peerId] = undefined;
       return state;
 
-    case "beginPath":
-      ctx = state[action.peerId].ctx;
+    case "beginPath": {
+      const ctx = state[action.peerId].ctx;
       ctx.beginPath();
       ctx.moveTo(action.x, action.y);
       return state;
+    }
 
-    case "lineTo":
-      ctx = state[action.peerId].ctx;
+    case "lineTo": {
+      const ctx = state[action.peerId].ctx;
       ctx.lineTo(action.x, action.y);
       ctx.stroke();
       return state;
+    }
+
 
     case "disconnected":
       return {};
@@ -71,10 +80,7 @@ const ConnectPeerList = ({ data, canvasRef }) => {
 
   const onClickConnect = () => {
     if (!inputPeer) return;
-    const conn = peer.connect(inputPeer);
-    const ctx = canvasRef.current.getContext("2d");
-    conn.on("open", () => conn.send(JSON.stringify({ type: "openRequest", peerId: myPeerId })));
-    dispatch({ type: "open", peerId: inputPeer, conn, ctx });
+    dispatch({ type: "open", peerId: inputPeer, myPeerId, peer, canvasRef });
     setInputPeer("");
   }
 
@@ -88,7 +94,7 @@ const ConnectPeerList = ({ data, canvasRef }) => {
   // send data
   useEffect(() => {
     dispatch({ type: "sendToAll", data, myPeerId });
-  }, [data]);
+  }, [data, myPeerId]);
 
   // receive data
   useEffect(() => {
@@ -96,14 +102,13 @@ const ConnectPeerList = ({ data, canvasRef }) => {
     peer.on("connection", conn => {
       conn.on("data", data => {
         const msg = JSON.parse(data);
-        console.log(msg);
-        dispatch({ ...msg, conn, canvasRef });
+        dispatch({ ...msg, peer, conn, canvasRef, myPeerId });
       });
     });
     peer.on("disconnected", () => {
       dispatch({ type: "disconnected" });
     });
-  }, [peer]);
+  }, [canvasRef, myPeerId, peer]);
 
   return <div>
     <h1>Connect Peer List</h1>
