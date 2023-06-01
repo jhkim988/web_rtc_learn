@@ -1,48 +1,107 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useReducer } from 'react';
 import { WebRTCContext } from './WebRTCConnectProvider';
 
-const ConnectPeerList = ({ data, controller }) => {
+// interface
+const key = "2f2b";
+const objConnInfo = {
+  [key]: {
+    conn: {}, // peer connection
+    ctx: {}, // canvas context
+  }, 
+}
+
+const reducer = (state, action) => {
+  let ctx = null;
+
+  switch (action.type) {
+    case "open":
+      return {
+        ...state,
+        [action.peerId]: {
+          conn: action.conn,
+          ctx: action.ctx,
+        },
+      }
+
+    case "openRequest":
+      return {
+        ...state,
+        [action.peerId]: {
+          conn: action.conn,
+          ctx: action.canvasRef.current.getContext("2d"),
+        }
+      }
+
+    case "close":
+      state[action.peerId] = undefined;
+      return state;
+
+    case "beginPath":
+      ctx = state[action.peerId].ctx;
+      ctx.beginPath();
+      ctx.moveTo(action.x, action.y);
+      return state;
+
+    case "lineTo":
+      ctx = state[action.peerId].ctx;
+      ctx.lineTo(action.x, action.y);
+      ctx.stroke();
+      return state;
+
+    case "disconnected":
+      return {};
+    
+    case "sendToAll":
+      Object.values(state).forEach((obj) => obj.conn.send(JSON.stringify({...action.data, peerId: action.myPeerId })));
+      return state;
+    
+    case "lineEnd":
+      return state;
+
+    default:
+      return;
+  }
+}
+
+const ConnectPeerList = ({ data, canvasRef }) => {
   const { peer, peerId: myPeerId } = useContext(WebRTCContext);
   const [inputPeer, setInputPeer] = useState("");
-  const [peerList, setPeerList] = useState([]);
-  const [connList, setConnList] = useState([]);
+
+  const [objConnInfo, dispatch] = useReducer(reducer, {});
 
   const onClickConnect = () => {
     if (!inputPeer) return;
     const conn = peer.connect(inputPeer);
-    conn.on("open", () => conn.send(JSON.stringify({ method: "open", peer: myPeerId })));
-    setPeerList([...peerList, inputPeer]);
-    setConnList([...connList, conn]);
+    const ctx = canvasRef.current.getContext("2d");
+    conn.on("open", () => conn.send(JSON.stringify({ type: "openRequest", peerId: myPeerId })));
+    dispatch({ type: "open", peerId: inputPeer, conn, ctx });
     setInputPeer("");
   }
 
   const onClickDisconnect = e => {
     const peer = e.target.dataset.peer;
-    const conn = connList.find(c => c.peer === peer);
-    conn.send(JSON.stringify({ method: "close", peer: myPeerId }));
-    setPeerList(peerList.filter(p => p !== peer));
-    setConnList(connList.filter(c => c.peer !== peer));
+    const conn = objConnInfo[peer];
+    conn.send(JSON.stringify({ type: "close", peerId: myPeerId }));
+    dispatch({ type: "close", peerId: peer });
   }
 
+  // send data
   useEffect(() => {
-    connList.forEach(conn => conn.send(JSON.stringify(data)));
+    dispatch({ type: "sendToAll", data, myPeerId });
   }, [data]);
 
+  // receive data
   useEffect(() => {
     if (!peer) return;
     peer.on("connection", conn => {
       conn.on("data", data => {
         const msg = JSON.parse(data);
         console.log(msg);
-        if (controller[msg.method]) {
-          controller[msg.method](msg, { connList, peerList, setConnList, setPeerList });
-          return;
-        }
+        dispatch({ ...msg, conn, canvasRef });
       });
     });
     peer.on("disconnected", () => {
-      setPeerList([]);
-      setConnList([]);
+      dispatch({ type: "disconnected" });
     });
   }, [peer]);
 
@@ -51,7 +110,7 @@ const ConnectPeerList = ({ data, controller }) => {
     <input type="text" onChange={e => setInputPeer(e.target.value)} value={inputPeer} />
     <button onClick={onClickConnect}>Connect</button>
     <ul>
-      {peerList.map(peer => <li key={peer}>{peer} <button data-peer={peer} onClick={onClickDisconnect}>disconnect</button></li>)}
+      {Object.keys(objConnInfo).map((peer) => <li key={peer}>{peer} <button data-peer={peer} onClick={onClickDisconnect}>disconnect</button></li>)}
     </ul>
   </div>
 }
