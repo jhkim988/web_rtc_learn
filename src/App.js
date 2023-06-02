@@ -1,5 +1,5 @@
 import WebRTCConnectProvider from './rtc/WebRTCConnectProvider';
-import CanvasPainting from './rtc/CanvasPaiting';
+import CanvasPainting from './rtc/CanvasPainting';
 import RTCVideo from './rtc/RTCVideo';
 
 const App = () => {
