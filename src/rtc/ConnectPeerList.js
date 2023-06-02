@@ -17,7 +17,6 @@ const reducer = (state, action) => {
       const conn = action.peer.connect(action.peerId);
       const ctx = action.canvasRef.current.getContext("2d");
       conn.on("open", () => conn.send(JSON.stringify({ type: "openReflection", peerId: action.myPeerId })));
-      console.log(conn, ctx);
       return {
         ...state,
         [action.peerId]: {
@@ -40,21 +39,23 @@ const reducer = (state, action) => {
     }
 
     case "close": {
-      if (!action.peerId || !state[action.peerId]) return;
-      const conn = state[action.peerId].conn;
-      conn.send(JSON.stringify({ type: "closeReflection", peerId: action.peerId }), () => {
-        conn.close();
-      });
-      delete state[action.peerId];
-      return state;
+      if (action.peerId && state[action.peerId]) {
+        const conn = state[action.peerId].conn;
+        conn.send(JSON.stringify({ type: "closeReflection", peerId: action.myPeerId }), () => {
+          conn.close();
+        });
+        delete state[action.peerId];  
+      }
+      return { ...state };
     }
 
     case "closeReflection": {
-      if (!action.peerId || !state[action.peerId]) return;
-      const conn = state[action.peerId].conn;
-      conn.close();
-      delete state[action.peerId];
-      return state;
+      if (action.peerId && state[action.peerId]) {
+        const conn = state[action.peerId].conn;
+        conn.close();
+        delete state[action.peerId];  
+      }
+      return { ...state };
     }
 
     case "beginPath": {
@@ -99,7 +100,7 @@ const ConnectPeerList = ({ data, canvasRef }) => {
   }
 
   const onClickDisconnect = e => {
-    dispatch({ type: "close", peerId: e.target.dataset.peer });
+    dispatch({ type: "close", peerId: e.target.dataset.peer, myPeerId });
   }
 
   // send data
