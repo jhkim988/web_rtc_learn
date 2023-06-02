@@ -2,21 +2,22 @@ import { useState, useEffect, useContext, useReducer } from 'react';
 import { WebRTCContext } from './WebRTCConnectProvider';
 
 // interface
-const key = "2f2b";
-const objConnInfo = {
-  [key]: {
-    conn: {}, // peer connection
-    ctx: {}, // canvas context
-  }, 
-}
+// const key = "2f2b";
+// const objConnInfo = {
+//   [key]: {
+//     conn: {}, // peer connection
+//     ctx: {}, // canvas context
+//   }, 
+// }
 
 const reducer = (state, action) => {
+  console.log(state, action);
   switch (action.type) {
     case "open": {
       const conn = action.peer.connect(action.peerId);
       const ctx = action.canvasRef.current.getContext("2d");
       conn.on("open", () => conn.send(JSON.stringify({ type: "openReflection", peerId: action.myPeerId })));
-
+      console.log(conn, ctx);
       return {
         ...state,
         [action.peerId]: {
@@ -38,9 +39,23 @@ const reducer = (state, action) => {
       }
     }
 
-    case "close":
-      state[action.peerId] = undefined;
+    case "close": {
+      if (!action.peerId || !state[action.peerId]) return;
+      const conn = state[action.peerId].conn;
+      conn.send(JSON.stringify({ type: "closeReflection", peerId: action.peerId }), () => {
+        conn.close();
+      });
+      delete state[action.peerId];
       return state;
+    }
+
+    case "closeReflection": {
+      if (!action.peerId || !state[action.peerId]) return;
+      const conn = state[action.peerId].conn;
+      conn.close();
+      delete state[action.peerId];
+      return state;
+    }
 
     case "beginPath": {
       const ctx = state[action.peerId].ctx;
@@ -55,20 +70,19 @@ const reducer = (state, action) => {
       ctx.stroke();
       return state;
     }
-
-
-    case "disconnected":
-      return {};
     
     case "sendToAll":
-      Object.values(state).forEach((obj) => obj.conn.send(JSON.stringify({...action.data, peerId: action.myPeerId })));
+      state && Object.values(state).forEach((obj) => obj.conn.send(JSON.stringify({...action.data, peerId: action.myPeerId })));
       return state;
-    
+
     case "lineEnd":
       return state;
 
+    case "disconnected":
+      return state;
+
     default:
-      return;
+      return state;
   }
 }
 
@@ -85,10 +99,7 @@ const ConnectPeerList = ({ data, canvasRef }) => {
   }
 
   const onClickDisconnect = e => {
-    const peer = e.target.dataset.peer;
-    const conn = objConnInfo[peer];
-    conn.send(JSON.stringify({ type: "close", peerId: myPeerId }));
-    dispatch({ type: "close", peerId: peer });
+    dispatch({ type: "close", peerId: e.target.dataset.peer });
   }
 
   // send data
@@ -105,9 +116,11 @@ const ConnectPeerList = ({ data, canvasRef }) => {
         dispatch({ ...msg, peer, conn, canvasRef, myPeerId });
       });
     });
+    
     peer.on("disconnected", () => {
       dispatch({ type: "disconnected" });
     });
+
   }, [canvasRef, myPeerId, peer]);
 
   return <div>
@@ -115,7 +128,7 @@ const ConnectPeerList = ({ data, canvasRef }) => {
     <input type="text" onChange={e => setInputPeer(e.target.value)} value={inputPeer} />
     <button onClick={onClickConnect}>Connect</button>
     <ul>
-      {Object.keys(objConnInfo).map((peer) => <li key={peer}>{peer} <button data-peer={peer} onClick={onClickDisconnect}>disconnect</button></li>)}
+      {objConnInfo && Object.keys(objConnInfo).map((peer) => <li key={peer}>{peer} <button data-peer={peer} onClick={onClickDisconnect}>disconnect</button></li>)}
     </ul>
   </div>
 }
